@@ -1,0 +1,9 @@
+[package]
+name = "parser"
+version = "0.1.0"
+authors = ["Brendan Ball <ball.brendan50@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+nom = "5.0.0"
+hex-literal = "0.2.0"
