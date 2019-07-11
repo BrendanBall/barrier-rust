@@ -1,7 +1,7 @@
 extern crate nom;
 extern crate hex_literal;
 
-use nom::number::complete::{be_u8, be_i16, be_u32};
+use nom::number::complete::{be_u8, be_u16, be_u32};
 use nom::bytes::complete::{tag, take};
 use nom::{IResult};
 use nom::branch::alt;
@@ -23,23 +23,23 @@ pub fn command(input: &[u8]) -> IResult<&[u8],Message> {
 
 pub fn key_down(input: &[u8]) -> IResult<&[u8],Message> {
     let (input, _) = tag("DKDN")(input)?;
-    let (input, key_id) = be_i16(input)?;
-    let (input, key_modifier_mask) = be_i16(input)?;
-    let (input, key_button) = be_i16(input)?;
+    let (input, key_id) = be_u16(input)?;
+    let (input, key_modifier_mask) = be_u16(input)?;
+    let (input, key_button) = be_u16(input)?;
     Ok((input, Message::Data(Data::KeyDown(KeyDown{key_id,key_modifier_mask,key_button}))))
 }
 
 pub fn mouse_move(input: &[u8]) -> IResult<&[u8],Message> {
     let (input, _) = tag("DMMV")(input)?;
-    let (input, x) = be_i16(input)?;
-    let (input, y) = be_i16(input)?;
+    let (input, x) = be_u16(input)?;
+    let (input, y) = be_u16(input)?;
     Ok((input, Message::Data(Data::MouseMove(MouseMove{x,y}))))
 }
 
 pub fn hello(input: &[u8]) -> IResult<&[u8],Message> {
     let (input, _) = tag("Barrier")(input)?;
-    let (input, major) = be_i16(input)?;
-    let (input, minor) = be_i16(input)?;
+    let (input, major) = be_u16(input)?;
+    let (input, minor) = be_u16(input)?;
     Ok((input, Message::Hello(Hello{server_version: ProtocolVersion{major,minor}})))
 }
 
@@ -72,10 +72,10 @@ pub fn options(input: &[u8]) -> IResult<&[u8],Message> {
 
 pub fn enter(input: &[u8]) -> IResult<&[u8],Message> {
     let (input, _) = tag("CINN")(input)?;
-    let (input, x) = be_i16(input)?;
-    let (input, y) = be_i16(input)?;
+    let (input, x) = be_u16(input)?;
+    let (input, y) = be_u16(input)?;
     let (input, sequence_number) = be_u32(input)?;
-    let (input, key_modifier_mask) = be_i16(input)?;
+    let (input, key_modifier_mask) = be_u16(input)?;
     Ok((input, Message::Command(Command::Enter(Enter{
         x, y, sequence_number, key_modifier_mask
     }))))
@@ -130,23 +130,23 @@ pub enum Error {
 
 #[derive(Debug, PartialEq)]
 pub struct Enter {
-    pub x: i16,
-    pub y: i16,
+    pub x: u16,
+    pub y: u16,
     pub sequence_number: u32,
-    pub key_modifier_mask: i16,
+    pub key_modifier_mask: u16,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct MouseMove {
-    pub x: i16,
-    pub y: i16,
+    pub x: u16,
+    pub y: u16,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct KeyDown {
-    pub key_id: i16,
-    pub key_modifier_mask: i16,
-    pub key_button: i16,
+    pub key_id: u16,
+    pub key_modifier_mask: u16,
+    pub key_button: u16,
 }
 
 #[derive(Debug, PartialEq)]
@@ -156,8 +156,8 @@ pub struct Hello {
 
 #[derive(Debug, PartialEq)]
 pub struct ProtocolVersion {
-    pub major: i16,
-    pub minor: i16,
+    pub major: u16,
+    pub minor: u16,
 }
 
 #[derive(Debug, PartialEq)]
