@@ -1,4 +1,4 @@
-use std::net::{TcpStream};
+use std::net::TcpStream;
 use std::io::{Read, Write};
 use std::str::from_utf8;
 
@@ -15,12 +15,12 @@ fn main() {
                 Ok(_) => {
                     let text = from_utf8(&data).unwrap();
                     println!("response: {}", text);
-                },
+                }
                 Err(e) => {
                     println!("Failed to receive data: {}", e);
                 }
             }
-        },
+        }
         Err(e) => {
             println!("Failed to connect: {}", e);
         }
