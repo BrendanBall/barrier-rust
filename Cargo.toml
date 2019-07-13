@@ -4,4 +4,8 @@ version = "0.1.0"
 authors = ["Brendan Ball <ball.brendan50@gmail.com>"]
 edition = "2018"
 
-[dependencies]
+[workspace]
+members = [".", "parser"]
+
+[dependencies.parser]
+path = "parser"

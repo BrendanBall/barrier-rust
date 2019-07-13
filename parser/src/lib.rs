@@ -6,7 +6,12 @@ use nom::bytes::complete::{tag, take};
 use nom::number::complete::{be_u16, be_u32, be_u8};
 use nom::IResult;
 
-pub fn command(input: &[u8]) -> IResult<&[u8], Message> {
+pub fn parse_frame(input: &[u8]) -> IResult<&[u8], Message> {
+    let (input, _) = take(4 as usize)(input)?;
+    message(input)
+}
+
+pub fn message(input: &[u8]) -> IResult<&[u8], Message> {
     alt((
         mouse_move,
         key_down,
@@ -194,7 +199,7 @@ mod tests {
         // kMsgHello = "Barrier%2i%2i";
         const BYTE_ARRAY: [u8; 11] = hex!("42 61 72 72 69 65 72 00 01 00 06");
         assert_eq!(
-            command(&BYTE_ARRAY),
+            message(&BYTE_ARRAY),
             Ok((
                 &[][..],
                 Message::Hello(Hello {
@@ -209,7 +214,7 @@ mod tests {
         // kMsgCKeepAlive = "CALV";
         const BYTE_ARRAY: [u8; 4] = hex!("43 41 4c 56");
         assert_eq!(
-            command(&BYTE_ARRAY),
+            message(&BYTE_ARRAY),
             Ok((&[][..], Message::Command(Command::KeepAlive)))
         );
     }
@@ -219,7 +224,7 @@ mod tests {
         // kMsgQInfo = "QINF";
         const BYTE_ARRAY: [u8; 4] = hex!("51 49 4e 46");
         assert_eq!(
-            command(&BYTE_ARRAY),
+            message(&BYTE_ARRAY),
             Ok((&[][..], Message::Query(Query::Info)))
         );
     }
@@ -229,7 +234,7 @@ mod tests {
         // kMsgCInfoAck = "CIAK";
         const BYTE_ARRAY: [u8; 4] = hex!("43 49 41 4b");
         assert_eq!(
-            command(&BYTE_ARRAY),
+            message(&BYTE_ARRAY),
             Ok((&[][..], Message::Command(Command::InfoAck)))
         );
     }
@@ -239,7 +244,7 @@ mod tests {
         // kMsgCResetOptions = "CROP";
         const BYTE_ARRAY: [u8; 4] = hex!("43 52 4f 50");
         assert_eq!(
-            command(&BYTE_ARRAY),
+            message(&BYTE_ARRAY),
             Ok((&[][..], Message::Command(Command::ResetOptions)))
         );
     }
@@ -254,7 +259,7 @@ mod tests {
         // kMsgCEnter = "CINN%2i%2i%4i%2i";
         const BYTE_ARRAY: [u8; 14] = hex!("43 49 4e 4e 00 00 01 f7 00 00 00 01 00 00");
         assert_eq!(
-            command(&BYTE_ARRAY),
+            message(&BYTE_ARRAY),
             Ok((
                 &[][..],
                 Message::Command(Command::Enter(Enter {
@@ -272,7 +277,7 @@ mod tests {
         // kMsgDSetOptions = "DSOP%4I";
         const BYTE_ARRAY: [u8; 8] = hex!("44 53 4f 50 00 00 00 00");
         assert_eq!(
-            command(&BYTE_ARRAY),
+            message(&BYTE_ARRAY),
             Ok((&[][..], Message::Data(Data::Options(Options {}))))
         );
     }
@@ -282,7 +287,7 @@ mod tests {
         // kMsgDClipboard = "DCLP%1i%4i%1i%s";
         const BYTE_ARRAY: [u8; 15] = hex!("44 43 4c 50 01 00 00 00 00 01 00 00 00 01 34");
         assert_eq!(
-            command(&BYTE_ARRAY),
+            message(&BYTE_ARRAY),
             Ok((&[][..], Message::Data(Data::Clipboard(Clipboard {}))))
         );
     }
@@ -295,7 +300,7 @@ mod tests {
         // kMsgDMouseMove = "DMMV%2i%2i";
         const BYTE_ARRAY: [u8; 8] = hex!("44 4d 4d 56 01 3b 02 98");
         assert_eq!(
-            command(&BYTE_ARRAY),
+            message(&BYTE_ARRAY),
             Ok((
                 &[][..],
                 Message::Data(Data::MouseMove(MouseMove { x: 315, y: 664 }))
@@ -312,7 +317,7 @@ mod tests {
         // kMsgDKeyDown = "DKDN%2i%2i%2i";
         const BYTE_ARRAY: [u8; 10] = hex!("44 4b 44 4e 00 63 00 02 00 36");
         assert_eq!(
-            command(&BYTE_ARRAY),
+            message(&BYTE_ARRAY),
             Ok((
                 &[][..],
                 Message::Data(Data::KeyDown(KeyDown {
