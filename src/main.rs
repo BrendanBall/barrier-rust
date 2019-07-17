@@ -22,13 +22,12 @@ fn event_loop(mut stream: TcpStream) {
         let mut frame_size_buffer = [0 as u8; 4];
         stream.read_exact(&mut frame_size_buffer).unwrap();
         let frame_size = u32::from_be_bytes(frame_size_buffer) as usize;
-        println!("receive frame header: {:x?}", &frame_size_buffer);
 
         let mut buffer = [0 as u8; 128];
 
         match stream.read_exact(&mut buffer[..frame_size]) {
             Ok(()) => {
-                println!("receive raw message: {:x?}", &buffer[..frame_size]);
+                // println!("receive raw message: {:x?}", &buffer[..frame_size]);
                 let frame = parse_frame(&buffer[..frame_size]);
                 if let Ok(frame) = frame {
                     let message = frame.1;
@@ -36,10 +35,11 @@ fn event_loop(mut stream: TcpStream) {
                     match response {
                         Option::Some(response) => {
                             println!("send raw message: {:x?}", response);
-                            stream
-                                .write(&(response.len() as u32).to_be_bytes())
-                                .unwrap();
-                            stream.write(&response).unwrap();
+                            let mut response_buffer = Vec::new();
+                            response_buffer
+                                .extend_from_slice(&(response.len() as u32).to_be_bytes());
+                            response_buffer.extend_from_slice(&response);
+                            stream.write(&response_buffer).unwrap();
                         }
                         Option::None => {}
                     }
@@ -69,7 +69,6 @@ fn hello_back() -> Vec<u8> {
     v.extend_from_slice(b"Barrier");
     v.extend_from_slice(&MAJOR.to_be_bytes()[..]);
     v.extend_from_slice(&MINOR.to_be_bytes()[..]);
-    v.extend_from_slice(&(0 as u32).to_be_bytes()[..]);
     v.extend_from_slice(&(CLIENT_NAME.len() as u32).to_be_bytes()[..]);
     v.extend_from_slice(CLIENT_NAME);
     v
