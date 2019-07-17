@@ -4,6 +4,7 @@
 name = "barrier-rust"
 version = "0.1.0"
 dependencies = [
+ "hex-literal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parser 0.1.0",
 ]
 

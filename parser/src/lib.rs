@@ -7,7 +7,6 @@ use nom::number::complete::{be_u16, be_u32, be_u8};
 use nom::IResult;
 
 pub fn parse_frame(input: &[u8]) -> IResult<&[u8], Message> {
-    let (input, _) = take(4 as usize)(input)?;
     message(input)
 }
 
