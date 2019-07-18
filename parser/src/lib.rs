@@ -2,7 +2,8 @@ extern crate hex_literal;
 extern crate nom;
 
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take};
+use nom::bytes::complete::tag;
+use nom::multi::length_data;
 use nom::number::complete::{be_u16, be_u32, be_u8};
 use nom::IResult;
 
@@ -81,8 +82,7 @@ pub fn reset_options(input: &[u8]) -> IResult<&[u8], Message> {
 
 pub fn options(input: &[u8]) -> IResult<&[u8], Message> {
     let (input, _) = tag("DSOP")(input)?;
-    let (input, length) = be_u32(input)?;
-    let (input, _) = take(length)(input)?;
+    let (input, _) = length_data(be_u32)(input)?;
     Ok((input, Message::Data(Data::Options(Options {}))))
 }
 
@@ -105,12 +105,18 @@ pub fn enter(input: &[u8]) -> IResult<&[u8], Message> {
 
 pub fn clipboard(input: &[u8]) -> IResult<&[u8], Message> {
     let (input, _) = tag("DCLP")(input)?;
-    let (input, _) = be_u8(input)?;
-    let (input, _) = be_u32(input)?;
-    let (input, _) = be_u8(input)?;
-    let (input, length) = be_u32(input)?;
-    let (input, _) = take(length)(input)?;
-    Ok((input, Message::Data(Data::Clipboard(Clipboard {}))))
+    let (input, clipboard) = be_u8(input)?;
+    let (input, sequence_number) = be_u32(input)?;
+    let (input, mark) = be_u8(input)?;
+    let (input, _) = length_data(be_u32)(input)?;
+    Ok((
+        input,
+        Message::Data(Data::Clipboard(Clipboard {
+            clipboard,
+            sequence_number,
+            mark,
+        })),
+    ))
 }
 
 #[derive(Debug, PartialEq)]
@@ -186,7 +192,11 @@ pub struct ProtocolVersion {
 pub struct Options {}
 
 #[derive(Debug, PartialEq)]
-pub struct Clipboard {}
+pub struct Clipboard {
+    clipboard: u8,
+    sequence_number: u32,
+    mark: u8,
+}
 
 #[cfg(test)]
 mod tests {

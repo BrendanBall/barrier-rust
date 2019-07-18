@@ -1,6 +1,7 @@
 extern crate parser;
 
 use parser::{parse_frame, Message, Query};
+use std::io;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
@@ -20,33 +21,42 @@ fn main() {
 fn event_loop(mut stream: TcpStream) {
     loop {
         let mut frame_size_buffer = [0 as u8; 4];
-        stream.read_exact(&mut frame_size_buffer).unwrap();
-        let frame_size = u32::from_be_bytes(frame_size_buffer) as usize;
-
-        let mut buffer = [0 as u8; 128];
-
-        match stream.read_exact(&mut buffer[..frame_size]) {
+        match stream.read_exact(&mut frame_size_buffer) {
             Ok(()) => {
-                // println!("receive raw message: {:x?}", &buffer[..frame_size]);
-                let frame = parse_frame(&buffer[..frame_size]);
-                if let Ok(frame) = frame {
-                    let message = frame.1;
-                    let response = handler(message);
-                    match response {
-                        Option::Some(response) => {
-                            println!("send raw message: {:x?}", response);
-                            let mut response_buffer = Vec::new();
-                            response_buffer
-                                .extend_from_slice(&(response.len() as u32).to_be_bytes());
-                            response_buffer.extend_from_slice(&response);
-                            stream.write(&response_buffer).unwrap();
+                let frame_size = u32::from_be_bytes(frame_size_buffer) as usize;
+                println!("receive message with frame size: {:?}", frame_size);
+
+                let mut buffer = vec![0; frame_size];
+
+                match stream.read_exact(&mut buffer[..frame_size]) {
+                    Ok(()) => {
+                        // println!("receive raw message: {:x?}", &buffer[..frame_size]);
+                        let frame = parse_frame(&buffer[..frame_size]);
+                        if let Ok(frame) = frame {
+                            let message = frame.1;
+                            let response = handler(message);
+                            match response {
+                                Option::Some(response) => {
+                                    println!("send raw message: {:x?}", response);
+                                    let mut response_buffer = Vec::new();
+                                    response_buffer
+                                        .extend_from_slice(&(response.len() as u32).to_be_bytes());
+                                    response_buffer.extend_from_slice(&response);
+                                    stream.write(&response_buffer).unwrap();
+                                }
+                                Option::None => {}
+                            }
                         }
-                        Option::None => {}
+                    }
+                    Err(e) => {
+                        println!("Failed to receive data: {}", e);
                     }
                 }
             }
             Err(e) => {
-                println!("Failed to receive data: {}", e);
+                println!("Failed to read frame size: {}", e);
+                println!("current frame size buffer: {:x?}", frame_size_buffer);
+                panic!()
             }
         }
     }
