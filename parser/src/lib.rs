@@ -15,6 +15,7 @@ pub fn message(input: &[u8]) -> IResult<&[u8], Message> {
     alt((
         mouse_move,
         key_down,
+        key_up,
         hello,
         keep_alive,
         query_info,
@@ -33,7 +34,22 @@ pub fn key_down(input: &[u8]) -> IResult<&[u8], Message> {
     let (input, key_button) = be_u16(input)?;
     Ok((
         input,
-        Message::Data(Data::KeyDown(KeyDown {
+        Message::Data(Data::KeyDown(Key {
+            key_id,
+            key_modifier_mask,
+            key_button,
+        })),
+    ))
+}
+
+pub fn key_up(input: &[u8]) -> IResult<&[u8], Message> {
+    let (input, _) = tag("DKUP")(input)?;
+    let (input, key_id) = be_u16(input)?;
+    let (input, key_modifier_mask) = be_u16(input)?;
+    let (input, key_button) = be_u16(input)?;
+    Ok((
+        input,
+        Message::Data(Data::KeyUp(Key {
             key_id,
             key_modifier_mask,
             key_button,
@@ -144,7 +160,8 @@ pub enum Command {
 #[derive(Debug, PartialEq)]
 pub enum Data {
     MouseMove(MouseMove),
-    KeyDown(KeyDown),
+    KeyDown(Key),
+    KeyUp(Key),
     Options(Options),
     Clipboard(Clipboard),
 }
@@ -171,7 +188,7 @@ pub struct MouseMove {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct KeyDown {
+pub struct Key {
     pub key_id: u16,
     pub key_modifier_mask: u16,
     pub key_button: u16,
@@ -297,7 +314,14 @@ mod tests {
         const BYTE_ARRAY: [u8; 15] = hex!("44 43 4c 50 01 00 00 00 00 01 00 00 00 01 34");
         assert_eq!(
             message(&BYTE_ARRAY),
-            Ok((&[][..], Message::Data(Data::Clipboard(Clipboard {}))))
+            Ok((
+                &[][..],
+                Message::Data(Data::Clipboard(Clipboard {
+                    clipboard: 1,
+                    mark: 1,
+                    sequence_number: 0,
+                }))
+            ))
         );
     }
 
@@ -329,7 +353,28 @@ mod tests {
             message(&BYTE_ARRAY),
             Ok((
                 &[][..],
-                Message::Data(Data::KeyDown(KeyDown {
+                Message::Data(Data::KeyDown(Key {
+                    key_id: 99,
+                    key_modifier_mask: 2,
+                    key_button: 54
+                }))
+            ))
+        );
+    }
+
+    #[test]
+    fn data_key_up() {
+        // Key Pressed
+        // Key Id: 99
+        // Key Modifier Mask: 2
+        // Key Button: 54
+        // kMsgDKeyDown = "DKUP%2i%2i%2i";
+        const BYTE_ARRAY: [u8; 10] = hex!("44 4b 55 50 00 63 00 02 00 36");
+        assert_eq!(
+            message(&BYTE_ARRAY),
+            Ok((
+                &[][..],
+                Message::Data(Data::KeyUp(Key {
                     key_id: 99,
                     key_modifier_mask: 2,
                     key_button: 54
