@@ -1,6 +1,4 @@
-extern crate parser;
-
-use parser::{parse_frame, Message, Query};
+use barrier::parser::{parse_frame, Message, Query};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 

@@ -1,14 +1,9 @@
 [package]
-name = "barrier-rust"
+name = "barrier"
 version = "0.1.0"
 authors = ["Brendan Ball <ball.brendan50@gmail.com>"]
 edition = "2018"
 
-[workspace]
-members = [".", "parser"]
-
 [dependencies]
 hex-literal = "0.2.0"
-
-[dependencies.parser]
-path = "parser"
+nom = "5.0.0"
