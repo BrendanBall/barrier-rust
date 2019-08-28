@@ -1,12 +1,14 @@
-use barrier::parser::{parse_frame, Message, Query};
+use barrier::input::Mouse;
+use barrier::parser::{parse_frame, Data, Message, Query};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
 fn main() {
+    let mouse = Mouse::new(1920);
     match TcpStream::connect("127.0.0.1:24800") {
         Ok(stream) => {
             println!("Successfully connected to server in port 24800");
-            event_loop(stream)
+            event_loop(stream, mouse)
         }
         Err(e) => {
             println!("Failed to connect: {}", e);
@@ -15,7 +17,7 @@ fn main() {
     println!("Terminated.");
 }
 
-fn event_loop(mut stream: TcpStream) {
+fn event_loop(mut stream: TcpStream, mut mouse: Mouse) {
     loop {
         let mut frame_size_buffer = [0 as u8; 4];
         match stream.read_exact(&mut frame_size_buffer) {
@@ -31,7 +33,7 @@ fn event_loop(mut stream: TcpStream) {
                         let frame = parse_frame(&buffer[..frame_size]);
                         if let Ok(frame) = frame {
                             let message = frame.1;
-                            let response = handler(message);
+                            let response = handler(message, &mut mouse);
                             match response {
                                 Option::Some(response) => {
                                     println!("send raw message: {:x?}", response);
@@ -59,11 +61,15 @@ fn event_loop(mut stream: TcpStream) {
     }
 }
 
-fn handler(message: Message) -> Option<Vec<u8>> {
+fn handler(message: Message, mouse: &mut Mouse) -> Option<Vec<u8>> {
     println!("message: {:?}", message);
     match message {
         Message::Hello(_) => Some(hello_back()),
         Message::Query(Query::Info) => Some(info()),
+        Message::Data(Data::MouseMove(mousemove)) => {
+            mouse.moveAbs(mousemove.x as i32, mousemove.y as i32);
+            None
+        }
         _ => None,
     }
 }
