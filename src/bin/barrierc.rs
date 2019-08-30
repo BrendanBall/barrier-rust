@@ -74,6 +74,14 @@ fn handler(message: Message, mouse: &mut Mouse) -> Option<Vec<u8>> {
             mouse.move_abs(mousemove.x as i32, mousemove.y as i32);
             None
         }
+        Message::Data(Data::MouseDown(mousedown)) => {
+            mouse.button_down(mousedown.id);
+            None
+        }
+        Message::Data(Data::MouseUp(mouseup)) => {
+            mouse.button_up(mouseup.id);
+            None
+        }
         _ => None,
     }
 }
