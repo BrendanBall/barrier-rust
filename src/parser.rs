@@ -3,9 +3,44 @@ extern crate nom;
 
 use nom::branch::alt;
 use nom::bytes::complete::tag;
+use nom::error::ErrorKind;
 use nom::multi::length_data;
 use nom::number::complete::{be_u16, be_u32, be_u8};
-use nom::IResult;
+use nom::Err;
+use std::fmt;
+
+#[derive(PartialEq)]
+pub enum ParseError<I> {
+    Other(I, ErrorKind),
+    NotImplemented(I),
+}
+
+impl fmt::Debug for ParseError<&[u8]> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ParseError::NotImplemented(input) => write!(
+                f,
+                "Request not implemented: {}, values: {:x?}, input: {:x?}",
+                std::str::from_utf8(&input[0..4]).unwrap().to_string(),
+                &input[4..],
+                input
+            ),
+            ParseError::Other(input, kind) => write!(f, "Parse error kind {:?} {:x?}", input, kind),
+        }
+    }
+}
+
+impl<I> nom::error::ParseError<I> for ParseError<I> {
+    fn from_error_kind(input: I, kind: ErrorKind) -> Self {
+        ParseError::Other(input, kind)
+    }
+
+    fn append(_: I, _: ErrorKind, other: Self) -> Self {
+        other
+    }
+}
+
+pub type IResult<I, O, E = ParseError<I>> = Result<(I, O), Err<E>>;
 
 pub fn parse_frame(input: &[u8]) -> IResult<&[u8], Message> {
     message(input)
@@ -14,6 +49,8 @@ pub fn parse_frame(input: &[u8]) -> IResult<&[u8], Message> {
 pub fn message(input: &[u8]) -> IResult<&[u8], Message> {
     alt((
         mouse_move,
+        mouse_down,
+        mouse_up,
         key_down,
         key_up,
         hello,
@@ -23,8 +60,14 @@ pub fn message(input: &[u8]) -> IResult<&[u8], Message> {
         reset_options,
         options,
         enter,
+        leave,
         clipboard,
+        not_implemented,
     ))(input)
+}
+
+pub fn not_implemented(input: &[u8]) -> IResult<&[u8], Message> {
+    Err(nom::Err::Failure(ParseError::NotImplemented(input)))
 }
 
 pub fn key_down(input: &[u8]) -> IResult<&[u8], Message> {
@@ -62,6 +105,18 @@ pub fn mouse_move(input: &[u8]) -> IResult<&[u8], Message> {
     let (input, x) = be_u16(input)?;
     let (input, y) = be_u16(input)?;
     Ok((input, Message::Data(Data::MouseMove(MouseMove { x, y }))))
+}
+
+pub fn mouse_down(input: &[u8]) -> IResult<&[u8], Message> {
+    let (input, _) = tag("DMDN")(input)?;
+    let (input, id) = be_u8(input)?;
+    Ok((input, Message::Data(Data::MouseDown(MouseDown { id }))))
+}
+
+pub fn mouse_up(input: &[u8]) -> IResult<&[u8], Message> {
+    let (input, _) = tag("DMUP")(input)?;
+    let (input, id) = be_u8(input)?;
+    Ok((input, Message::Data(Data::MouseUp(MouseUp { id }))))
 }
 
 pub fn hello(input: &[u8]) -> IResult<&[u8], Message> {
@@ -119,6 +174,11 @@ pub fn enter(input: &[u8]) -> IResult<&[u8], Message> {
     ))
 }
 
+pub fn leave(input: &[u8]) -> IResult<&[u8], Message> {
+    let (input, _) = tag("COUT")(input)?;
+    Ok((input, Message::Command(Command::Leave)))
+}
+
 pub fn clipboard(input: &[u8]) -> IResult<&[u8], Message> {
     let (input, _) = tag("DCLP")(input)?;
     let (input, clipboard) = be_u8(input)?;
@@ -155,11 +215,14 @@ pub enum Command {
     InfoAck,
     ResetOptions,
     Enter(Enter),
+    Leave,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Data {
     MouseMove(MouseMove),
+    MouseDown(MouseDown),
+    MouseUp(MouseUp),
     KeyDown(Key),
     KeyUp(Key),
     Options(Options),
@@ -185,6 +248,16 @@ pub struct Enter {
 pub struct MouseMove {
     pub x: u16,
     pub y: u16,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct MouseDown {
+    pub id: u8,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct MouseUp {
+    pub id: u8,
 }
 
 #[derive(Debug, PartialEq)]
@@ -299,6 +372,15 @@ mod tests {
     }
 
     #[test]
+    fn command_leave() {
+        let bytes: &[u8] = &hex!("43 4f 55 54")[..];
+        assert_eq!(
+            message(bytes),
+            Ok((&[][..], Message::Command(Command::Leave)))
+        );
+    }
+
+    #[test]
     fn data_options() {
         // kMsgDSetOptions = "DSOP%4I";
         const BYTE_ARRAY: [u8; 8] = hex!("44 53 4f 50 00 00 00 00");
@@ -338,6 +420,24 @@ mod tests {
                 &[][..],
                 Message::Data(Data::MouseMove(MouseMove { x: 315, y: 664 }))
             ))
+        );
+    }
+
+    #[test]
+    fn data_mouse_down() {
+        let bytes: &[u8] = &hex!("44 4d 44 4e 01")[..];
+        assert_eq!(
+            message(bytes),
+            Ok((&[][..], Message::Data(Data::MouseDown(MouseDown { id: 1 }))))
+        );
+    }
+
+    #[test]
+    fn data_mouse_up() {
+        let bytes: &[u8] = &hex!("44 4d 55 50 01")[..];
+        assert_eq!(
+            message(bytes),
+            Ok((&[][..], Message::Data(Data::MouseUp(MouseUp { id: 1 }))))
         );
     }
 

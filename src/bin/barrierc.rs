@@ -31,20 +31,24 @@ fn event_loop(mut stream: TcpStream, mut mouse: Mouse) {
                     Ok(()) => {
                         // println!("receive raw message: {:x?}", &buffer[..frame_size]);
                         let frame = parse_frame(&buffer[..frame_size]);
-                        if let Ok(frame) = frame {
-                            let message = frame.1;
-                            let response = handler(message, &mut mouse);
-                            match response {
-                                Option::Some(response) => {
-                                    println!("send raw message: {:x?}", response);
-                                    let mut response_buffer = Vec::new();
-                                    response_buffer
-                                        .extend_from_slice(&(response.len() as u32).to_be_bytes());
-                                    response_buffer.extend_from_slice(&response);
-                                    stream.write(&response_buffer).unwrap();
+                        match frame {
+                            Ok(frame) => {
+                                let message = frame.1;
+                                let response = handler(message, &mut mouse);
+                                match response {
+                                    Option::Some(response) => {
+                                        println!("send raw message: {:x?}", response);
+                                        let mut response_buffer = Vec::new();
+                                        response_buffer.extend_from_slice(
+                                            &(response.len() as u32).to_be_bytes(),
+                                        );
+                                        response_buffer.extend_from_slice(&response);
+                                        stream.write(&response_buffer).unwrap();
+                                    }
+                                    Option::None => {}
                                 }
-                                Option::None => {}
                             }
+                            Err(e) => println!("Failed to parse frame: {:x?}", e),
                         }
                     }
                     Err(e) => {
@@ -67,7 +71,7 @@ fn handler(message: Message, mouse: &mut Mouse) -> Option<Vec<u8>> {
         Message::Hello(_) => Some(hello_back()),
         Message::Query(Query::Info) => Some(info()),
         Message::Data(Data::MouseMove(mousemove)) => {
-            mouse.moveAbs(mousemove.x as i32, mousemove.y as i32);
+            mouse.move_abs(mousemove.x as i32, mousemove.y as i32);
             None
         }
         _ => None,

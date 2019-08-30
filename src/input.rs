@@ -1,7 +1,5 @@
 extern crate uinput;
 
-use std::thread;
-use std::time::Duration;
 use uinput::device::Device;
 use uinput::event::absolute::Absolute::Position;
 use uinput::event::absolute::Position::{X, Y};
@@ -39,9 +37,19 @@ impl Mouse {
         }
     }
 
-    pub fn moveAbs(&mut self, x: i32, y: i32) {
+    pub fn move_abs(&mut self, x: i32, y: i32) {
         self.device.send(X, x).unwrap();
         self.device.send(Y, y).unwrap();
+        self.device.synchronize().unwrap();
+    }
+
+    pub fn button_down(&mut self, id: u8) {
+        self.device.press(&Controller::Mouse(Left)).unwrap();
+        self.device.synchronize().unwrap();
+    }
+
+    pub fn button_up(&mut self, id: u8) {
+        self.device.release(&Controller::Mouse(Left)).unwrap();
         self.device.synchronize().unwrap();
     }
 }
