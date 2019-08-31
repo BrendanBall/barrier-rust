@@ -5,6 +5,7 @@ use uinput::event::absolute::Absolute::Position;
 use uinput::event::absolute::Position::{X, Y};
 use uinput::event::controller;
 use uinput::event::controller::Controller;
+use uinput::event::keyboard;
 use uinput::event::Event;
 
 pub struct Mouse {
@@ -15,7 +16,7 @@ impl Mouse {
     pub fn new(x_maximum: i32, y_maximum: i32) -> Self {
         let device = uinput::open("/dev/uinput")
             .unwrap()
-            .name("barrier")
+            .name("barrier mouse")
             .unwrap()
             .event(Event::Controller(Controller::Mouse(
                 controller::Mouse::Left,
@@ -29,7 +30,7 @@ impl Mouse {
             .max(y_maximum)
             .create()
             .unwrap();
-        Mouse { device }
+        Self { device }
     }
 
     pub fn move_abs(&mut self, x: i32, y: i32) {
@@ -49,7 +50,7 @@ impl Mouse {
     pub fn button_up(&mut self, button: impl Into<MouseButton>) {
         let button = button.into();
         self.device
-            .press(&Controller::Mouse(button.into()))
+            .release(&Controller::Mouse(button.into()))
             .unwrap();
         self.device.synchronize().unwrap();
     }
@@ -68,11 +69,15 @@ impl From<u8> for MouseButton {
             2 => Self::Middle,
             3 => Self::Right,
             4 => Self::Extra,
-            _ => Self::Left,
+            id => {
+                println!("unkown button id: {:?}", id);
+                Self::Left
+            }
         }
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum MouseButton {
     Left,
     Right,
@@ -82,4 +87,55 @@ pub enum MouseButton {
     Forward,
     Back,
     Task,
+}
+
+pub struct Keyboard {
+    device: Device,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Key {
+    A,
+}
+
+impl Into<keyboard::Key> for Key {
+    fn into(self) -> keyboard::Key {
+        keyboard::Key::A
+    }
+}
+
+impl From<u16> for Key {
+    fn from(id: u16) -> Self {
+        match id {
+            _ => Self::A,
+        }
+    }
+}
+
+impl Keyboard {
+    pub fn new() -> Self {
+        let device = uinput::open("/dev/uinput")
+            .unwrap()
+            .name("barrier keyboard")
+            .unwrap()
+            .event(uinput::event::Keyboard::All)
+            .unwrap()
+            .create()
+            .unwrap();
+        Self { device }
+    }
+
+    pub fn key_down(&mut self, button: impl Into<Key>) {
+        let key = button.into();
+        let key: keyboard::Key = key.into();
+        self.device.press(&key).unwrap();
+        self.device.synchronize().unwrap();
+    }
+
+    pub fn key_up(&mut self, button: impl Into<Key>) {
+        let key = button.into();
+        let key: keyboard::Key = key.into();
+        self.device.release(&key).unwrap();
+        self.device.synchronize().unwrap();
+    }
 }

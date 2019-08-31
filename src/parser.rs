@@ -72,30 +72,30 @@ pub fn not_implemented(input: &[u8]) -> IResult<&[u8], Message> {
 
 pub fn key_down(input: &[u8]) -> IResult<&[u8], Message> {
     let (input, _) = tag("DKDN")(input)?;
-    let (input, key_id) = be_u16(input)?;
-    let (input, key_modifier_mask) = be_u16(input)?;
-    let (input, key_button) = be_u16(input)?;
+    let (input, id) = be_u16(input)?;
+    let (input, modifier_mask) = be_u16(input)?;
+    let (input, button) = be_u16(input)?;
     Ok((
         input,
         Message::Data(Data::KeyDown(Key {
-            key_id,
-            key_modifier_mask,
-            key_button,
+            id,
+            modifier_mask,
+            button,
         })),
     ))
 }
 
 pub fn key_up(input: &[u8]) -> IResult<&[u8], Message> {
     let (input, _) = tag("DKUP")(input)?;
-    let (input, key_id) = be_u16(input)?;
-    let (input, key_modifier_mask) = be_u16(input)?;
-    let (input, key_button) = be_u16(input)?;
+    let (input, id) = be_u16(input)?;
+    let (input, modifier_mask) = be_u16(input)?;
+    let (input, button) = be_u16(input)?;
     Ok((
         input,
         Message::Data(Data::KeyUp(Key {
-            key_id,
-            key_modifier_mask,
-            key_button,
+            id,
+            modifier_mask,
+            button,
         })),
     ))
 }
@@ -110,13 +110,13 @@ pub fn mouse_move(input: &[u8]) -> IResult<&[u8], Message> {
 pub fn mouse_down(input: &[u8]) -> IResult<&[u8], Message> {
     let (input, _) = tag("DMDN")(input)?;
     let (input, id) = be_u8(input)?;
-    Ok((input, Message::Data(Data::MouseDown(MouseDown { id }))))
+    Ok((input, Message::Data(Data::MouseDown(Mouse { id }))))
 }
 
 pub fn mouse_up(input: &[u8]) -> IResult<&[u8], Message> {
     let (input, _) = tag("DMUP")(input)?;
     let (input, id) = be_u8(input)?;
-    Ok((input, Message::Data(Data::MouseUp(MouseUp { id }))))
+    Ok((input, Message::Data(Data::MouseUp(Mouse { id }))))
 }
 
 pub fn hello(input: &[u8]) -> IResult<&[u8], Message> {
@@ -221,8 +221,8 @@ pub enum Command {
 #[derive(Debug, PartialEq)]
 pub enum Data {
     MouseMove(MouseMove),
-    MouseDown(MouseDown),
-    MouseUp(MouseUp),
+    MouseDown(Mouse),
+    MouseUp(Mouse),
     KeyDown(Key),
     KeyUp(Key),
     Options(Options),
@@ -251,20 +251,15 @@ pub struct MouseMove {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct MouseDown {
-    pub id: u8,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct MouseUp {
+pub struct Mouse {
     pub id: u8,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Key {
-    pub key_id: u16,
-    pub key_modifier_mask: u16,
-    pub key_button: u16,
+    pub id: u16,
+    pub modifier_mask: u16,
+    pub button: u16,
 }
 
 #[derive(Debug, PartialEq)]
@@ -428,7 +423,7 @@ mod tests {
         let bytes: &[u8] = &hex!("44 4d 44 4e 01")[..];
         assert_eq!(
             message(bytes),
-            Ok((&[][..], Message::Data(Data::MouseDown(MouseDown { id: 1 }))))
+            Ok((&[][..], Message::Data(Data::MouseDown(Mouse { id: 1 }))))
         );
     }
 
@@ -437,7 +432,7 @@ mod tests {
         let bytes: &[u8] = &hex!("44 4d 55 50 01")[..];
         assert_eq!(
             message(bytes),
-            Ok((&[][..], Message::Data(Data::MouseUp(MouseUp { id: 1 }))))
+            Ok((&[][..], Message::Data(Data::MouseUp(Mouse { id: 1 }))))
         );
     }
 
@@ -454,9 +449,9 @@ mod tests {
             Ok((
                 &[][..],
                 Message::Data(Data::KeyDown(Key {
-                    key_id: 99,
-                    key_modifier_mask: 2,
-                    key_button: 54
+                    id: 99,
+                    modifier_mask: 2,
+                    button: 54
                 }))
             ))
         );
@@ -475,9 +470,9 @@ mod tests {
             Ok((
                 &[][..],
                 Message::Data(Data::KeyUp(Key {
-                    key_id: 99,
-                    key_modifier_mask: 2,
-                    key_button: 54
+                    id: 99,
+                    modifier_mask: 2,
+                    button: 54
                 }))
             ))
         );

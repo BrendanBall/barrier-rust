@@ -1,14 +1,15 @@
-use barrier::input::Mouse;
+use barrier::input::{Keyboard, Mouse};
 use barrier::parser::{parse_frame, Data, Message, Query};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
 fn main() {
     let mouse = Mouse::new(1920, 1080);
+    let keyboard = Keyboard::new();
     match TcpStream::connect("127.0.0.1:24800") {
         Ok(stream) => {
             println!("Successfully connected to server in port 24800");
-            event_loop(stream, mouse)
+            event_loop(stream, mouse, keyboard)
         }
         Err(e) => {
             println!("Failed to connect: {}", e);
@@ -17,7 +18,7 @@ fn main() {
     println!("Terminated.");
 }
 
-fn event_loop(mut stream: TcpStream, mut mouse: Mouse) {
+fn event_loop(mut stream: TcpStream, mut mouse: Mouse, mut keyboard: Keyboard) {
     loop {
         let mut frame_size_buffer = [0 as u8; 4];
         match stream.read_exact(&mut frame_size_buffer) {
@@ -34,7 +35,7 @@ fn event_loop(mut stream: TcpStream, mut mouse: Mouse) {
                         match frame {
                             Ok(frame) => {
                                 let message = frame.1;
-                                let response = handler(message, &mut mouse);
+                                let response = handler(message, &mut mouse, &mut keyboard);
                                 match response {
                                     Option::Some(response) => {
                                         println!("send raw message: {:x?}", response);
@@ -65,7 +66,7 @@ fn event_loop(mut stream: TcpStream, mut mouse: Mouse) {
     }
 }
 
-fn handler(message: Message, mouse: &mut Mouse) -> Option<Vec<u8>> {
+fn handler(message: Message, mouse: &mut Mouse, keyboard: &mut Keyboard) -> Option<Vec<u8>> {
     println!("message: {:?}", message);
     match message {
         Message::Hello(_) => Some(hello_back()),
@@ -80,6 +81,14 @@ fn handler(message: Message, mouse: &mut Mouse) -> Option<Vec<u8>> {
         }
         Message::Data(Data::MouseUp(mouseup)) => {
             mouse.button_up(mouseup.id);
+            None
+        }
+        Message::Data(Data::KeyDown(key)) => {
+            keyboard.key_down(key.button);
+            None
+        }
+        Message::Data(Data::KeyUp(key)) => {
+            keyboard.key_up(key.button);
             None
         }
         _ => None,
