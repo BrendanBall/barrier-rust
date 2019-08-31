@@ -4,7 +4,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 
 fn main() {
-    let mouse = Mouse::new(1920);
+    let mouse = Mouse::new(1920, 1080);
     match TcpStream::connect("127.0.0.1:24800") {
         Ok(stream) => {
             println!("Successfully connected to server in port 24800");
