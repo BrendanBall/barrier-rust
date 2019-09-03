@@ -6,7 +6,7 @@ use uinput::event::absolute::Position::{X, Y};
 use uinput::event::controller;
 use uinput::event::controller::Controller;
 use uinput::event::keyboard;
-use uinput::event::Event;
+use uinput::event::{Event, Kind, Code};
 
 pub struct Mouse {
     device: Device,
@@ -34,9 +34,9 @@ impl Mouse {
     }
 
     pub fn move_abs(&mut self, x: i32, y: i32) {
-        self.device.send(X, x).unwrap();
-        self.device.send(Y, y).unwrap();
-        self.device.synchronize().unwrap();
+        // self.device.send(X, x).unwrap();
+        // self.device.send(Y, y).unwrap();
+        // self.device.synchronize().unwrap();
     }
 
     pub fn button_down(&mut self, button: impl Into<MouseButton>) {
@@ -98,17 +98,42 @@ pub enum Key {
     A,
 }
 
-impl Into<keyboard::Key> for Key {
-    fn into(self) -> keyboard::Key {
-        keyboard::Key::A
-    }
-}
 
+
+// Key_A: 30
+// message: Data(KeyDown(Key { id: 97, modifier_mask: 0, button: 38 }))
+// message: Data(KeyUp(Key { id: 97, modifier_mask: 0, button: 38 }))
+// >>> hex(38)
+// '0x26'
+// >>> hex(97)
+// '0x61'
+
+// Key_S: 31
+// message: Data(KeyDown(Key { id: 115, modifier_mask: 0, button: 39 }))
+// message: Data(KeyUp(Key { id: 115, modifier_mask: 0, button: 39 }))
+
+// Key_Esc: 1
+// message: Data(KeyDown(Key { id: 61211, modifier_mask: 0, button: 9 }))
+// message: Data(KeyUp(Key { id: 61211, modifier_mask: 0, button: 9 }))
+// KEY_LEFTCTRL: 29
+// message: Data(KeyDown(Key { id: 61411, modifier_mask: 0, button: 37 }))
+// message: Data(KeyUp(Key { id: 61411, modifier_mask: 2, button: 37 }))
+// KEY_LEFTALT: 56
+// message: Data(KeyDown(Key { id: 61417, modifier_mask: 0, button: 64 }))
+// message: Data(KeyUp(Key { id: 61417, modifier_mask: 4, button: 64 }))
+
+// looks like formula is button + 8
 impl From<u16> for Key {
     fn from(id: u16) -> Self {
         match id {
             _ => Self::A,
         }
+    }
+}
+
+impl Into<keyboard::Key> for Key {
+    fn into(self) -> keyboard::Key {
+        keyboard::Key::A
     }
 }
 
@@ -133,9 +158,9 @@ impl Keyboard {
     }
 
     pub fn key_up(&mut self, button: impl Into<Key>) {
-        let key = button.into();
-        let key: keyboard::Key = key.into();
-        self.device.release(&key).unwrap();
-        self.device.synchronize().unwrap();
+        // let key = button.into();
+        // let key: keyboard::Key = key.into();
+        // self.device.release(&key).unwrap();
+        // self.device.synchronize().unwrap();
     }
 }
