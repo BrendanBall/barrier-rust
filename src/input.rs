@@ -180,10 +180,10 @@ pub enum Key {
 // message: Data(KeyDown(Key { id: 61417, modifier_mask: 0, button: 64 }))
 // message: Data(KeyUp(Key { id: 61417, modifier_mask: 4, button: 64 }))
 
-// looks like formula is button + 8
+// looks like formula is button - 8
 
 fn button_to_ev_key(button: u16) -> EV_KEY {
-    int_to_ev_key((button + 8).into()).unwrap()
+    int_to_ev_key((button - 8).into()).unwrap()
 }
 
 impl Keyboard {
