@@ -1,3 +1,6 @@
+extern crate evdev_rs;
+extern crate evdev_sys;
+
 use evdev_rs::enums::{EventCode, EventType, EV_ABS, EV_KEY, EV_SYN};
 use evdev_rs::{AbsInfo, Device, InputEvent, TimeVal, UInputDevice};
 use std::thread;
