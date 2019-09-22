@@ -1,64 +1,115 @@
-extern crate uinput;
+extern crate evdev_rs;
 
-use uinput::device::Device;
-use uinput::event::absolute::Absolute::Position;
-use uinput::event::absolute::Position::{X, Y};
-use uinput::event::controller;
-use uinput::event::controller::Controller;
-use uinput::event::keyboard;
-use uinput::event::{Event, Kind, Code};
+use evdev_rs::enums::{EventCode, EventType, EV_ABS, EV_KEY, EV_SYN};
+use evdev_rs::{AbsInfo, Device, InputEvent, TimeVal, UInputDevice};
 
 pub struct Mouse {
-    device: Device,
+    device: UInputDevice,
 }
 
 impl Mouse {
     pub fn new(x_maximum: i32, y_maximum: i32) -> Self {
-        let device = uinput::open("/dev/uinput")
-            .unwrap()
-            .name("barrier mouse")
-            .unwrap()
-            .event(Event::Controller(Controller::Mouse(
-                controller::Mouse::Left,
-            )))
-            .unwrap()
-            .event(Event::Absolute(Position(X)))
-            .unwrap()
-            .max(x_maximum)
-            .event(Event::Absolute(Position(Y)))
-            .unwrap()
-            .max(y_maximum)
-            .create()
+        let evdevice = Device::new().unwrap();
+        evdevice.set_name("barrier-rust");
+        evdevice
+            .enable(&EventCode::EV_KEY(EV_KEY::BTN_LEFT))
             .unwrap();
+        evdevice.enable(&EventType::EV_ABS).unwrap();
+        evdevice
+            .enable_event_code(
+                &EventCode::EV_ABS(EV_ABS::ABS_X),
+                Some(&AbsInfo {
+                    value: 0,
+                    minimum: 0,
+                    maximum: x_maximum,
+                    fuzz: 0,
+                    flat: 0,
+                    resolution: 0,
+                }),
+            )
+            .unwrap();
+        evdevice
+            .enable_event_code(
+                &EventCode::EV_ABS(EV_ABS::ABS_Y),
+                Some(&AbsInfo {
+                    value: 0,
+                    minimum: 0,
+                    maximum: y_maximum,
+                    fuzz: 0,
+                    flat: 0,
+                    resolution: 0,
+                }),
+            )
+            .unwrap();
+
+        let device = UInputDevice::create_from_device(&evdevice).unwrap();
         Self { device }
     }
 
     pub fn move_abs(&mut self, x: i32, y: i32) {
-        // self.device.send(X, x).unwrap();
-        // self.device.send(Y, y).unwrap();
-        // self.device.synchronize().unwrap();
+        self.device
+            .write_event(&InputEvent::new(
+                &TimeVal::new(0, 0),
+                &EventCode::EV_ABS(EV_ABS::ABS_X),
+                x,
+            ))
+            .unwrap();
+        self.device
+            .write_event(&InputEvent::new(
+                &TimeVal::new(0, 0),
+                &EventCode::EV_ABS(EV_ABS::ABS_Y),
+                y,
+            ))
+            .unwrap();
+        self.device
+            .write_event(&InputEvent::new(
+                &TimeVal::new(0, 0),
+                &EventCode::EV_SYN(EV_SYN::SYN_REPORT),
+                0,
+            ))
+            .unwrap();
     }
 
     pub fn button_down(&mut self, button: impl Into<MouseButton>) {
         let button = button.into();
         self.device
-            .press(&Controller::Mouse(button.into()))
+            .write_event(&InputEvent::new(
+                &TimeVal::new(0, 0),
+                &EventCode::EV_KEY(button.into()),
+                1,
+            ))
             .unwrap();
-        self.device.synchronize().unwrap();
+        self.device
+            .write_event(&InputEvent::new(
+                &TimeVal::new(0, 0),
+                &EventCode::EV_SYN(EV_SYN::SYN_REPORT),
+                0,
+            ))
+            .unwrap();
     }
 
     pub fn button_up(&mut self, button: impl Into<MouseButton>) {
         let button = button.into();
         self.device
-            .release(&Controller::Mouse(button.into()))
+            .write_event(&InputEvent::new(
+                &TimeVal::new(0, 0),
+                &EventCode::EV_KEY(button.into()),
+                0,
+            ))
             .unwrap();
-        self.device.synchronize().unwrap();
+        self.device
+            .write_event(&InputEvent::new(
+                &TimeVal::new(0, 0),
+                &EventCode::EV_SYN(EV_SYN::SYN_REPORT),
+                0,
+            ))
+            .unwrap();
     }
 }
 
-impl Into<controller::Mouse> for MouseButton {
-    fn into(self) -> controller::Mouse {
-        controller::Mouse::Left
+impl Into<EV_KEY> for MouseButton {
+    fn into(self) -> EV_KEY {
+        EV_KEY::BTN_LEFT
     }
 }
 
@@ -90,15 +141,13 @@ pub enum MouseButton {
 }
 
 pub struct Keyboard {
-    device: Device,
+    device: UInputDevice,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Key {
     A,
 }
-
-
 
 // Key_A: 30
 // message: Data(KeyDown(Key { id: 97, modifier_mask: 0, button: 38 }))
@@ -131,30 +180,28 @@ impl From<u16> for Key {
     }
 }
 
-impl Into<keyboard::Key> for Key {
-    fn into(self) -> keyboard::Key {
-        keyboard::Key::A
-    }
-}
+// impl Into<keyboard::Key> for Key {
+//     fn into(self) -> keyboard::Key {
+//         keyboard::Key::A
+//     }
+// }
 
 impl Keyboard {
     pub fn new() -> Self {
-        let device = uinput::open("/dev/uinput")
-            .unwrap()
-            .name("barrier keyboard")
-            .unwrap()
-            .event(uinput::event::Keyboard::All)
-            .unwrap()
-            .create()
+        let evdevice = Device::new().unwrap();
+        evdevice.set_name("barrier-rust");
+        evdevice
+            .enable(&EventCode::EV_KEY(EV_KEY::BTN_LEFT))
             .unwrap();
+        let device = UInputDevice::create_from_device(&evdevice).unwrap();
         Self { device }
     }
 
     pub fn key_down(&mut self, button: impl Into<Key>) {
-        let key = button.into();
-        let key: keyboard::Key = key.into();
-        self.device.press(&key).unwrap();
-        self.device.synchronize().unwrap();
+        // let key = button.into();
+        // let key: keyboard::Key = key.into();
+        // self.device.press(&key).unwrap();
+        // self.device.synchronize().unwrap();
     }
 
     pub fn key_up(&mut self, button: impl Into<Key>) {
