@@ -2,8 +2,15 @@
 name = "barrier"
 version = "0.1.0"
 authors = ["Brendan Ball <ball.brendan50@gmail.com>"]
+description = """
+Barrier at https://github.com/debauchee/barrier is a fork of synergy.
+This is a complete rewrite in rust.
+"""
+license = "GNU General Public License v2.0"
 edition = "2018"
 default-run = "barrierc"
+readme = "README.md"
+repository = "https://github.com/brendanball/barrier-rust"
 
 [dependencies]
 hex-literal = "0.2.0"
