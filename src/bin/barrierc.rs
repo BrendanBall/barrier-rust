@@ -1,12 +1,33 @@
 use barrier::input::{Keyboard, Mouse};
 use barrier::parser::{parse_frame, Data, Message, Query};
+use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
+#[derive(Serialize, Deserialize, Debug)]
+struct Config {
+    server: ConfigServer,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ConfigServer {
+    address: String,
+}
+
 fn main() {
+    let xdg_dirs = xdg::BaseDirectories::with_prefix("barrier-rust").unwrap();
+    let config_path = xdg_dirs.find_config_file("config.toml").unwrap();
+    let mut settings = config::Config::default();
+    settings
+        .merge(config::File::from(config_path))
+        .unwrap()
+        .merge(config::Environment::with_prefix("BARRIER_RUST"))
+        .unwrap();
+    let config = settings.try_into::<Config>().unwrap();
+    println!("{:?}", config);
     let mouse = Mouse::new(1920, 1080);
     let keyboard = Keyboard::new();
-    match TcpStream::connect("127.0.0.1:24800") {
+    match TcpStream::connect(config.server.address) {
         Ok(stream) => {
             println!("Successfully connected to server in port 24800");
             event_loop(stream, mouse, keyboard)

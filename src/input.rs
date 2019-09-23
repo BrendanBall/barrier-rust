@@ -190,7 +190,7 @@ impl Keyboard {
     pub fn new() -> Self {
         let evdevice = Device::new().unwrap();
         evdevice.set_name("barrier-rust");
-        for key in &keyboard_keys[..] {
+        for key in &KEYBOARD_KEYS[..] {
             evdevice.enable(&EventCode::EV_KEY(key.clone())).unwrap();
         }
         let device = UInputDevice::create_from_device(&evdevice).unwrap();
@@ -234,7 +234,7 @@ impl Keyboard {
     }
 }
 
-const keyboard_keys: [EV_KEY; 146] = [
+const KEYBOARD_KEYS: [EV_KEY; 146] = [
     EV_KEY::KEY_ESC,
     EV_KEY::KEY_1,
     EV_KEY::KEY_2,
