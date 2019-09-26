@@ -1,8 +1,33 @@
 use barrier::input::{Keyboard, Mouse};
 use barrier::parser::{parse_frame, Data, Message, Query};
 use serde::{Deserialize, Serialize};
+use snafu::{OptionExt, ResultExt, Snafu};
 use std::io::{Read, Write};
 use std::net::TcpStream;
+
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("Could not get XDG base directory: {}", source))]
+    ConfigDir { source: xdg::BaseDirectoriesError },
+    #[snafu(display("Could not get config file"))]
+    ConfigFile {},
+    #[snafu(display("Could not merge config: {}", source))]
+    MergeConfig { source: config::ConfigError },
+    #[snafu(display("Could not parse config: {}", source))]
+    DeserializeConfig { source: config::ConfigError },
+    #[snafu(display("Create stream failed: {}", source))]
+    CreateStreamFailed { source: std::io::Error },
+    #[snafu(display("Write to stream failed: {}", source))]
+    WriteStreamFailed { source: std::io::Error },
+    #[snafu(display("Read from stream failed: {}", source))]
+    ReadStreamFailed { source: std::io::Error },
+    #[snafu(display("Create device failed: {}", source))]
+    CreateDeviceFailed { source: barrier::input::Error },
+    #[snafu(display("Handling event failed: {}", source))]
+    HandleEvent { source: barrier::input::Error },
+}
+
+type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Config {
@@ -15,104 +40,108 @@ struct ConfigServer {
 }
 
 fn main() {
-    let xdg_dirs = xdg::BaseDirectories::with_prefix("barrier-rust").unwrap();
-    let config_path = xdg_dirs.find_config_file("config.toml").unwrap();
+    if let Err(err) = try_main() {
+        eprintln!("{}", err);
+        std::process::exit(2);
+    }
+}
+
+fn try_main() -> Result<()> {
+    let xdg_dirs = xdg::BaseDirectories::with_prefix("barrier-rust").context(ConfigDir {})?;
+    let config_path = xdg_dirs
+        .find_config_file("config.toml")
+        .context(ConfigFile {})?;
     let mut settings = config::Config::default();
     settings
         .merge(config::File::from(config_path))
-        .unwrap()
+        .context(MergeConfig {})?
         .merge(config::Environment::with_prefix("BARRIER_RUST"))
-        .unwrap();
-    let config = settings.try_into::<Config>().unwrap();
+        .context(MergeConfig {})?;
+    let config = settings
+        .try_into::<Config>()
+        .context(DeserializeConfig {})?;
     println!("{:?}", config);
-    let mouse = Mouse::new(1920, 1080);
-    let keyboard = Keyboard::new();
-    match TcpStream::connect(config.server.address) {
-        Ok(stream) => {
-            println!("Successfully connected to server in port 24800");
-            event_loop(stream, mouse, keyboard)
-        }
-        Err(e) => {
-            println!("Failed to connect: {}", e);
-        }
-    }
-    println!("Terminated.");
+    run(&config)
 }
 
-fn event_loop(mut stream: TcpStream, mut mouse: Mouse, mut keyboard: Keyboard) {
+fn run(config: &Config) -> Result<()> {
+    let mouse = Mouse::new(1920, 1080).context(CreateDeviceFailed {})?;
+    let keyboard = Keyboard::new().context(CreateDeviceFailed {})?;
+    let stream =
+        TcpStream::connect(config.server.address.clone()).context(CreateStreamFailed {})?;
+    event_loop(stream, mouse, keyboard)
+}
+
+fn event_loop(mut stream: TcpStream, mut mouse: Mouse, mut keyboard: Keyboard) -> Result<()> {
     loop {
         let mut frame_size_buffer = [0 as u8; 4];
-        match stream.read_exact(&mut frame_size_buffer) {
-            Ok(()) => {
-                let frame_size = u32::from_be_bytes(frame_size_buffer) as usize;
-                println!("receive message with frame size: {:?}", frame_size);
+        stream
+            .read_exact(&mut frame_size_buffer)
+            .context(ReadStreamFailed {})?;
+        let frame_size = u32::from_be_bytes(frame_size_buffer) as usize;
+        // println!("receive message with frame size: {:?}", frame_size);
 
-                let mut buffer = vec![0; frame_size];
+        let mut buffer = vec![0; frame_size];
+        stream
+            .read_exact(&mut buffer[..frame_size])
+            .context(ReadStreamFailed {})?;
 
-                match stream.read_exact(&mut buffer[..frame_size]) {
-                    Ok(()) => {
-                        // println!("receive raw message: {:x?}", &buffer[..frame_size]);
-                        let frame = parse_frame(&buffer[..frame_size]);
-                        match frame {
-                            Ok(frame) => {
-                                let message = frame.1;
-                                let response = handler(message, &mut mouse, &mut keyboard);
-                                match response {
-                                    Option::Some(response) => {
-                                        println!("send raw message: {:x?}", response);
-                                        let mut response_buffer = Vec::new();
-                                        response_buffer.extend_from_slice(
-                                            &(response.len() as u32).to_be_bytes(),
-                                        );
-                                        response_buffer.extend_from_slice(&response);
-                                        stream.write(&response_buffer).unwrap();
-                                    }
-                                    Option::None => {}
-                                }
-                            }
-                            Err(e) => println!("Failed to parse frame: {:x?}", e),
-                        }
+        // println!("receive raw message: {:x?}", &buffer[..frame_size]);
+        let frame = parse_frame(&buffer[..frame_size]);
+        match frame {
+            Ok(frame) => {
+                let message = frame.1;
+                let response = handler(message, &mut mouse, &mut keyboard)?;
+                match response {
+                    Option::Some(response) => {
+                        println!("send raw message: {:x?}", response);
+                        let mut response_buffer = Vec::new();
+                        response_buffer.extend_from_slice(&(response.len() as u32).to_be_bytes());
+                        response_buffer.extend_from_slice(&response);
+                        stream
+                            .write(&response_buffer)
+                            .context(WriteStreamFailed {})?;
                     }
-                    Err(e) => {
-                        println!("Failed to receive data: {}", e);
-                    }
+                    Option::None => {}
                 }
             }
-            Err(e) => {
-                println!("Failed to read frame size: {}", e);
-                println!("current frame size buffer: {:x?}", frame_size_buffer);
-                panic!()
-            }
+            Err(e) => println!("Failed to parse frame: {:x?}", e),
         }
     }
 }
 
-fn handler(message: Message, mouse: &mut Mouse, keyboard: &mut Keyboard) -> Option<Vec<u8>> {
+fn handler(
+    message: Message,
+    mouse: &mut Mouse,
+    keyboard: &mut Keyboard,
+) -> Result<Option<Vec<u8>>> {
     println!("message: {:?}", message);
     match message {
-        Message::Hello(_) => Some(hello_back()),
-        Message::Query(Query::Info) => Some(info()),
+        Message::Hello(_) => Ok(Some(hello_back())),
+        Message::Query(Query::Info) => Ok(Some(info())),
         Message::Data(Data::MouseMove(mousemove)) => {
-            mouse.move_abs(mousemove.x as i32, mousemove.y as i32);
-            None
+            mouse
+                .move_abs(mousemove.x as i32, mousemove.y as i32)
+                .context(HandleEvent {})?;
+            Ok(None)
         }
         Message::Data(Data::MouseDown(mousedown)) => {
-            mouse.button_down(mousedown.id);
-            None
+            mouse.button_down(mousedown.id).context(HandleEvent {})?;
+            Ok(None)
         }
         Message::Data(Data::MouseUp(mouseup)) => {
-            mouse.button_up(mouseup.id);
-            None
+            mouse.button_up(mouseup.id).context(HandleEvent {})?;
+            Ok(None)
         }
         Message::Data(Data::KeyDown(key)) => {
-            keyboard.key_down(key.button);
-            None
+            keyboard.key_down(key.button).context(HandleEvent {})?;
+            Ok(None)
         }
         Message::Data(Data::KeyUp(key)) => {
-            keyboard.key_up(key.button);
-            None
+            keyboard.key_up(key.button).context(HandleEvent {})?;
+            Ok(None)
         }
-        _ => None,
+        _ => Ok(None),
     }
 }
 

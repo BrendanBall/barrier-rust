@@ -21,7 +21,9 @@ impl fmt::Debug for ParseError<&[u8]> {
             ParseError::NotImplemented(input) => write!(
                 f,
                 "Request not implemented: {}, values: {:x?}, input: {:x?}",
-                std::str::from_utf8(&input[0..4]).unwrap().to_string(),
+                std::str::from_utf8(&input[0..4])
+                    .map_err(|_e| fmt::Error {})?
+                    .to_string(),
                 &input[4..],
                 input
             ),

@@ -2,19 +2,69 @@ extern crate evdev_rs;
 
 use evdev_rs::enums::{int_to_ev_key, EventCode, EventType, EV_ABS, EV_KEY, EV_SYN};
 use evdev_rs::{AbsInfo, Device, InputEvent, TimeVal, UInputDevice};
+use nix::errno::Errno;
+use snafu::{OptionExt, ResultExt, Snafu};
+
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("Could not create {} device", device_type))]
+    CreateDevice { device_type: DeviceType },
+    #[snafu(display("Could not create {} uinput device: {}", device_type, source))]
+    CreateUInputDevice {
+        device_type: DeviceType,
+        source: Errno,
+    },
+    #[snafu(display("Could not enable property for {}: {}", device_type, source))]
+    EnableDeviceProperty {
+        device_type: DeviceType,
+        source: Errno,
+    },
+    #[snafu(display("Could not create event for {}: {}", device_type, source))]
+    CreateEvent {
+        device_type: DeviceType,
+        source: Errno,
+    },
+    #[snafu(display("Could not map key for {}", device_type))]
+    MapKey { device_type: DeviceType },
+}
+
+#[derive(Debug)]
+pub enum DeviceType {
+    Mouse,
+    Keyboard,
+}
+
+impl std::fmt::Display for DeviceType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+        match *self {
+            DeviceType::Mouse => f.write_str("Mouse"),
+            DeviceType::Keyboard => f.write_str("Keyboard"),
+        }
+    }
+}
+
+type Result<T, E = Error> = std::result::Result<T, E>;
 
 pub struct Mouse {
     device: UInputDevice,
 }
 
 impl Mouse {
-    pub fn new(x_maximum: i32, y_maximum: i32) -> Self {
-        let evdevice = Device::new().unwrap();
+    pub fn new(x_maximum: i32, y_maximum: i32) -> Result<Self> {
+        let evdevice = Device::new().context(CreateDevice {
+            device_type: DeviceType::Mouse,
+        })?;
         evdevice.set_name("barrier-rust");
         evdevice
             .enable(&EventCode::EV_KEY(EV_KEY::BTN_LEFT))
-            .unwrap();
-        evdevice.enable(&EventType::EV_ABS).unwrap();
+            .context(EnableDeviceProperty {
+                device_type: DeviceType::Mouse,
+            })?;
+        evdevice
+            .enable(&EventType::EV_ABS)
+            .context(EnableDeviceProperty {
+                device_type: DeviceType::Mouse,
+            })?;
         evdevice
             .enable_event_code(
                 &EventCode::EV_ABS(EV_ABS::ABS_X),
@@ -27,7 +77,9 @@ impl Mouse {
                     resolution: 0,
                 }),
             )
-            .unwrap();
+            .context(EnableDeviceProperty {
+                device_type: DeviceType::Mouse,
+            })?;
         evdevice
             .enable_event_code(
                 &EventCode::EV_ABS(EV_ABS::ABS_Y),
@@ -40,37 +92,48 @@ impl Mouse {
                     resolution: 0,
                 }),
             )
-            .unwrap();
+            .context(EnableDeviceProperty {
+                device_type: DeviceType::Mouse,
+            })?;
 
-        let device = UInputDevice::create_from_device(&evdevice).unwrap();
-        Self { device }
+        let device = UInputDevice::create_from_device(&evdevice).context(CreateUInputDevice {
+            device_type: DeviceType::Mouse,
+        })?;
+        Ok(Self { device })
     }
 
-    pub fn move_abs(&mut self, x: i32, y: i32) {
+    pub fn move_abs(&mut self, x: i32, y: i32) -> Result<()> {
         self.device
             .write_event(&InputEvent::new(
                 &TimeVal::new(0, 0),
                 &EventCode::EV_ABS(EV_ABS::ABS_X),
                 x,
             ))
-            .unwrap();
+            .context(CreateEvent {
+                device_type: DeviceType::Mouse,
+            })?;
         self.device
             .write_event(&InputEvent::new(
                 &TimeVal::new(0, 0),
                 &EventCode::EV_ABS(EV_ABS::ABS_Y),
                 y,
             ))
-            .unwrap();
+            .context(CreateEvent {
+                device_type: DeviceType::Mouse,
+            })?;
         self.device
             .write_event(&InputEvent::new(
                 &TimeVal::new(0, 0),
                 &EventCode::EV_SYN(EV_SYN::SYN_REPORT),
                 0,
             ))
-            .unwrap();
+            .context(CreateEvent {
+                device_type: DeviceType::Mouse,
+            })?;
+        Ok(())
     }
 
-    pub fn button_down(&mut self, button: impl Into<MouseButton>) {
+    pub fn button_down(&mut self, button: impl Into<MouseButton>) -> Result<()> {
         let button = button.into();
         self.device
             .write_event(&InputEvent::new(
@@ -78,17 +141,22 @@ impl Mouse {
                 &EventCode::EV_KEY(button.into()),
                 1,
             ))
-            .unwrap();
+            .context(CreateEvent {
+                device_type: DeviceType::Mouse,
+            })?;
         self.device
             .write_event(&InputEvent::new(
                 &TimeVal::new(0, 0),
                 &EventCode::EV_SYN(EV_SYN::SYN_REPORT),
                 0,
             ))
-            .unwrap();
+            .context(CreateEvent {
+                device_type: DeviceType::Mouse,
+            })?;
+        Ok(())
     }
 
-    pub fn button_up(&mut self, button: impl Into<MouseButton>) {
+    pub fn button_up(&mut self, button: impl Into<MouseButton>) -> Result<()> {
         let button = button.into();
         self.device
             .write_event(&InputEvent::new(
@@ -96,14 +164,19 @@ impl Mouse {
                 &EventCode::EV_KEY(button.into()),
                 0,
             ))
-            .unwrap();
+            .context(CreateEvent {
+                device_type: DeviceType::Mouse,
+            })?;
         self.device
             .write_event(&InputEvent::new(
                 &TimeVal::new(0, 0),
                 &EventCode::EV_SYN(EV_SYN::SYN_REPORT),
                 0,
             ))
-            .unwrap();
+            .context(CreateEvent {
+                device_type: DeviceType::Mouse,
+            })?;
+        Ok(())
     }
 }
 
@@ -182,55 +255,76 @@ pub enum Key {
 
 // looks like formula is button - 8
 
-fn button_to_ev_key(button: u16) -> EV_KEY {
-    int_to_ev_key((button - 8).into()).unwrap()
+fn button_to_ev_key(button: u16) -> Result<EV_KEY> {
+    let key = int_to_ev_key((button - 8).into()).context(MapKey {
+        device_type: DeviceType::Keyboard,
+    })?;
+    Ok(key)
 }
 
 impl Keyboard {
-    pub fn new() -> Self {
-        let evdevice = Device::new().unwrap();
+    pub fn new() -> Result<Self> {
+        let evdevice = Device::new().context(CreateDevice {
+            device_type: DeviceType::Keyboard,
+        })?;
         evdevice.set_name("barrier-rust");
         for key in &KEYBOARD_KEYS[..] {
-            evdevice.enable(&EventCode::EV_KEY(key.clone())).unwrap();
+            evdevice
+                .enable(&EventCode::EV_KEY(key.clone()))
+                .context(EnableDeviceProperty {
+                    device_type: DeviceType::Keyboard,
+                })?;
         }
-        let device = UInputDevice::create_from_device(&evdevice).unwrap();
-        Self { device }
+        let device = UInputDevice::create_from_device(&evdevice).context(CreateUInputDevice {
+            device_type: DeviceType::Keyboard,
+        })?;
+        Ok(Self { device })
     }
 
-    pub fn key_down(&mut self, button: u16) {
+    pub fn key_down(&mut self, button: u16) -> Result<()> {
         let button = button.into();
         self.device
             .write_event(&InputEvent::new(
                 &TimeVal::new(0, 0),
-                &EventCode::EV_KEY(button_to_ev_key(button)),
+                &EventCode::EV_KEY(button_to_ev_key(button)?),
                 1,
             ))
-            .unwrap();
+            .context(CreateEvent {
+                device_type: DeviceType::Keyboard,
+            })?;
         self.device
             .write_event(&InputEvent::new(
                 &TimeVal::new(0, 0),
                 &EventCode::EV_SYN(EV_SYN::SYN_REPORT),
                 0,
             ))
-            .unwrap();
+            .context(CreateEvent {
+                device_type: DeviceType::Keyboard,
+            })?;
+        Ok(())
     }
 
-    pub fn key_up(&mut self, button: u16) {
+    pub fn key_up(&mut self, button: u16) -> Result<()> {
         let button = button.into();
         self.device
             .write_event(&InputEvent::new(
                 &TimeVal::new(0, 0),
-                &EventCode::EV_KEY(button_to_ev_key(button)),
+                &EventCode::EV_KEY(button_to_ev_key(button)?),
                 0,
             ))
-            .unwrap();
+            .context(CreateEvent {
+                device_type: DeviceType::Keyboard,
+            })?;
         self.device
             .write_event(&InputEvent::new(
                 &TimeVal::new(0, 0),
                 &EventCode::EV_SYN(EV_SYN::SYN_REPORT),
                 0,
             ))
-            .unwrap();
+            .context(CreateEvent {
+                device_type: DeviceType::Keyboard,
+            })?;
+        Ok(())
     }
 }
 
