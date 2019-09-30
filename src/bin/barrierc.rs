@@ -1,9 +1,11 @@
+use async_std::net::TcpStream;
+use async_std::prelude::*;
+use async_std::task;
 use barrier::input::{Keyboard, Mouse};
 use barrier::parser::{parse_frame, Data, Message, Query};
 use serde::{Deserialize, Serialize};
 use snafu::{OptionExt, ResultExt, Snafu};
 use std::io::{Read, Write};
-use std::net::TcpStream;
 
 #[derive(Debug, Snafu)]
 pub enum Error {
@@ -61,22 +63,24 @@ fn try_main() -> Result<()> {
         .try_into::<Config>()
         .context(DeserializeConfig {})?;
     println!("{:?}", config);
-    run(&config)
+    task::block_on(run(&config))
 }
 
-fn run(config: &Config) -> Result<()> {
+async fn run(config: &Config) -> Result<()> {
     let mouse = Mouse::new(1920, 1080).context(CreateDeviceFailed {})?;
     let keyboard = Keyboard::new().context(CreateDeviceFailed {})?;
-    let stream =
-        TcpStream::connect(config.server.address.clone()).context(CreateStreamFailed {})?;
-    event_loop(stream, mouse, keyboard)
+    let stream = TcpStream::connect(config.server.address.clone())
+        .await
+        .context(CreateStreamFailed {})?;
+    event_loop(stream, mouse, keyboard).await
 }
 
-fn event_loop(mut stream: TcpStream, mut mouse: Mouse, mut keyboard: Keyboard) -> Result<()> {
+async fn event_loop(mut stream: TcpStream, mut mouse: Mouse, mut keyboard: Keyboard) -> Result<()> {
     loop {
         let mut frame_size_buffer = [0 as u8; 4];
         stream
             .read_exact(&mut frame_size_buffer)
+            .await
             .context(ReadStreamFailed {})?;
         let frame_size = u32::from_be_bytes(frame_size_buffer) as usize;
         // println!("receive message with frame size: {:?}", frame_size);
@@ -84,6 +88,7 @@ fn event_loop(mut stream: TcpStream, mut mouse: Mouse, mut keyboard: Keyboard) -
         let mut buffer = vec![0; frame_size];
         stream
             .read_exact(&mut buffer[..frame_size])
+            .await
             .context(ReadStreamFailed {})?;
 
         // println!("receive raw message: {:x?}", &buffer[..frame_size]);
@@ -94,12 +99,13 @@ fn event_loop(mut stream: TcpStream, mut mouse: Mouse, mut keyboard: Keyboard) -
                 let response = handler(message, &mut mouse, &mut keyboard)?;
                 match response {
                     Option::Some(response) => {
-                        println!("send raw message: {:x?}", response);
+                        // println!("send raw message: {:x?}", response);
                         let mut response_buffer = Vec::new();
                         response_buffer.extend_from_slice(&(response.len() as u32).to_be_bytes());
                         response_buffer.extend_from_slice(&response);
                         stream
                             .write(&response_buffer)
+                            .await
                             .context(WriteStreamFailed {})?;
                     }
                     Option::None => {}
@@ -168,5 +174,11 @@ fn info() -> Vec<u8> {
     v.extend_from_slice(&(0 as u16).to_be_bytes()[..]);
     v.extend_from_slice(&(1280 as u16).to_be_bytes()[..]);
     v.extend_from_slice(&(720 as u16).to_be_bytes()[..]);
+    v
+}
+
+fn keep_alive() -> Vec<u8> {
+    let mut v = Vec::new();
+    v.extend_from_slice(b"CALV");
     v
 }
