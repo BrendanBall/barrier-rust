@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use snafu::{OptionExt, ResultExt, Snafu};
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::thread;
+use std::time::Duration;
 
 #[derive(Debug, Snafu)]
 pub enum Error {
@@ -17,6 +19,8 @@ pub enum Error {
     DeserializeConfig { source: config::ConfigError },
     #[snafu(display("Create stream failed: {}", source))]
     CreateStreamFailed { source: std::io::Error },
+    #[snafu(display("Clone stream failed: {}", source))]
+    CloneStreamFailed { source: std::io::Error },
     #[snafu(display("Write to stream failed: {}", source))]
     WriteStreamFailed { source: std::io::Error },
     #[snafu(display("Read from stream failed: {}", source))]
@@ -72,7 +76,24 @@ fn run(config: &Config) -> Result<()> {
     event_loop(stream, mouse, keyboard)
 }
 
+fn write_message(mut stream: &TcpStream, message: Vec<u8>) -> Result<()> {
+    println!("send raw message: {:x?}", message);
+    let mut response_buffer = Vec::new();
+    response_buffer.extend_from_slice(&(message.len() as u32).to_be_bytes());
+    response_buffer.extend_from_slice(&message);
+    stream
+        .write(&response_buffer)
+        .context(WriteStreamFailed {})?;
+    Ok(())
+}
+
 fn event_loop(mut stream: TcpStream, mut mouse: Mouse, mut keyboard: Keyboard) -> Result<()> {
+    let writer = stream.try_clone().unwrap();
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_secs(2));
+        write_message(&writer, keep_alive()).unwrap();
+    });
+
     loop {
         let mut frame_size_buffer = [0 as u8; 4];
         stream
@@ -94,13 +115,7 @@ fn event_loop(mut stream: TcpStream, mut mouse: Mouse, mut keyboard: Keyboard) -
                 let response = handler(message, &mut mouse, &mut keyboard)?;
                 match response {
                     Option::Some(response) => {
-                        println!("send raw message: {:x?}", response);
-                        let mut response_buffer = Vec::new();
-                        response_buffer.extend_from_slice(&(response.len() as u32).to_be_bytes());
-                        response_buffer.extend_from_slice(&response);
-                        stream
-                            .write(&response_buffer)
-                            .context(WriteStreamFailed {})?;
+                        write_message(&stream, response)?;
                     }
                     Option::None => {}
                 }
@@ -115,7 +130,7 @@ fn handler(
     mouse: &mut Mouse,
     keyboard: &mut Keyboard,
 ) -> Result<Option<Vec<u8>>> {
-    println!("message: {:?}", message);
+    println!("receive: {:?}", message);
     match message {
         Message::Hello(_) => Ok(Some(hello_back())),
         Message::Query(Query::Info) => Ok(Some(info())),
@@ -168,5 +183,11 @@ fn info() -> Vec<u8> {
     v.extend_from_slice(&(0 as u16).to_be_bytes()[..]);
     v.extend_from_slice(&(1280 as u16).to_be_bytes()[..]);
     v.extend_from_slice(&(720 as u16).to_be_bytes()[..]);
+    v
+}
+
+fn keep_alive() -> Vec<u8> {
+    let mut v = Vec::new();
+    v.extend_from_slice(b"CALV");
     v
 }
