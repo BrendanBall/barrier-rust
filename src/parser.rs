@@ -1,6 +1,3 @@
-extern crate hex_literal;
-extern crate nom;
-
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::error::ErrorKind;

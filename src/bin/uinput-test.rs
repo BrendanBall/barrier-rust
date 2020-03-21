@@ -1,5 +1,3 @@
-extern crate uinput;
-
 use std::thread;
 use std::time::Duration;
 use uinput::event::absolute::Absolute::Position;

@@ -1,5 +1,3 @@
-extern crate evdev_rs;
-
 use evdev_rs::enums::{int_to_ev_key, EventCode, EventType, EV_ABS, EV_KEY, EV_SYN};
 use evdev_rs::{AbsInfo, Device, InputEvent, TimeVal, UInputDevice};
 use nix::errno::Errno;
